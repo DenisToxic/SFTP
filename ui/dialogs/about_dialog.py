@@ -130,10 +130,13 @@ class AboutDialog(QDialog):
         button_layout = QHBoxLayout()
         
         self.check_updates_btn = QPushButton("Check for Updates")
+        self.debug_btn = QPushButton("Update Debug")
+        self.debug_btn.clicked.connect(self._show_debug_info)
         self.ok_btn = QPushButton("OK")
         self.ok_btn.setDefault(True)
         
         button_layout.addWidget(self.check_updates_btn)
+        button_layout.addWidget(self.debug_btn)
         button_layout.addStretch()
         button_layout.addWidget(self.ok_btn)
         
@@ -171,3 +174,7 @@ class AboutDialog(QDialog):
         self.version_manager.update_available.connect(on_update_available)
         self.version_manager.update_check_completed.connect(on_check_completed)
         self.version_manager.check_for_updates(silent=False)
+
+    def _show_debug_info(self):
+        """Show update debug information"""
+        self.version_manager.show_update_debug_info()

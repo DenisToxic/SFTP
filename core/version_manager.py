@@ -102,7 +102,7 @@ class VersionManager(QObject):
     update_failed = Signal(str)  # error_message
     
     # Configuration
-    CURRENT_VERSION = "1.1.0"
+    CURRENT_VERSION = "1.0.0"
     UPDATE_CHECK_URL = "https://api.github.com/repos/DenisToxic/SFTP/releases/latest"
     GITHUB_RELEASES_URL = "https://github.com/DenisToxic/SFTP/releases"
     UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000  # 24 hours in milliseconds
@@ -396,12 +396,17 @@ class VersionManager(QObject):
         if not REQUESTS_AVAILABLE:
             self.update_failed.emit("Update downloads are not available in this build")
             return
-            
+        
         try:
+            self.debug_update_process(f"Starting update download for version {version_info.version}")
+            
             # Create temporary file for download
             temp_dir = tempfile.mkdtemp(prefix="sftp_update_")
             filename = os.path.basename(version_info.download_url)
             temp_file = os.path.join(temp_dir, filename)
+            
+            self.debug_update_process(f"Download URL: {version_info.download_url}")
+            self.debug_update_process(f"Temp file: {temp_file}")
             
             # Show progress dialog
             self.progress_dialog = QProgressDialog(
@@ -425,6 +430,7 @@ class VersionManager(QObject):
             self.downloader.start()
             
         except Exception as e:
+            self.debug_update_process(f"Download setup failed: {str(e)}")
             self.update_failed.emit(f"Failed to start download: {str(e)}")
             
     def _on_download_progress(self, downloaded: int, total: int):
@@ -451,10 +457,13 @@ class VersionManager(QObject):
         if self.progress_dialog:
             self.progress_dialog.close()
             self.progress_dialog = None
-            
+        
         try:
+            self.debug_update_process(f"Download completed: {file_path}")
+            self.debug_update_process(f"File size: {os.path.getsize(file_path)} bytes")
             self._install_update(file_path, version_info)
         except Exception as e:
+            self.debug_update_process(f"Installation failed: {str(e)}")
             self.update_failed.emit(f"Failed to install update: {str(e)}")
             
     def _on_download_failed(self, error_message: str):
@@ -541,7 +550,7 @@ class VersionManager(QObject):
                 )
                 self.update_installed.emit()
                 return
-            
+        
             # Check if we can write to the installation directory
             install_dir = self.get_installation_path()
             if not os.access(install_dir, os.W_OK):
@@ -551,7 +560,7 @@ class VersionManager(QObject):
                     f"Please run the installer as administrator or use the installer version."
                 )
                 return
-            
+        
             # Create backup of current executable
             backup_path = current_exe + ".backup"
             try:
@@ -560,10 +569,10 @@ class VersionManager(QObject):
                 shutil.copy2(current_exe, backup_path)
             except Exception as e:
                 print(f"Warning: Could not create backup: {e}")
-            
-            # Create update script
+        
+            # Create update script with improved file handling
             update_script = self._create_update_script(new_exe_path, current_exe, backup_path)
-            
+        
             # Show confirmation dialog
             reply = QMessageBox.question(
                 None,
@@ -574,14 +583,15 @@ class VersionManager(QObject):
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes
             )
-            
+        
             if reply == QMessageBox.Yes:
                 # Execute update script and exit
                 if sys.platform == 'win32':
-                    subprocess.Popen([update_script], shell=True)
+                    # Use start /wait to ensure the script completes before continuing
+                    subprocess.Popen(['cmd', '/c', 'start', '/wait', update_script], shell=True)
                 else:
                     subprocess.Popen(['bash', update_script])
-                
+            
                 self.update_installed.emit()
                 QApplication.quit()
             else:
@@ -591,7 +601,7 @@ class VersionManager(QObject):
                     os.remove(update_script)
                 except:
                     pass
-                    
+                
         except Exception as e:
             self.update_failed.emit(f"Installation failed: {str(e)}")
             
@@ -607,34 +617,46 @@ class VersionManager(QObject):
             Path to update script
         """
         script_dir = os.path.dirname(new_exe_path)
-        
+    
         if sys.platform == 'win32':
-            # Windows batch script
+            # Windows batch script with improved file handling
             script_path = os.path.join(script_dir, "update.bat")
             script_content = f'''@echo off
 echo Updating SFTP GUI Manager...
 
 REM Wait for main application to close
-timeout /t 3 /nobreak >nul
+timeout /t 5 /nobreak >nul
+
+REM Kill any remaining instances
+taskkill /F /IM "{os.path.basename(current_exe_path)}" /T >nul 2>&1
+
+REM Wait a bit more to ensure file is released
+timeout /t 2 /nobreak >nul
 
 REM Replace executable
+echo Replacing executable...
 copy /Y "{new_exe_path}" "{current_exe_path}"
 if errorlevel 1 (
     echo Update failed! Restoring backup...
     if exist "{backup_path}" (
         copy /Y "{backup_path}" "{current_exe_path}"
     )
-    pause
+    echo Press any key to exit
+    pause >nul
     exit /b 1
 )
 
 REM Clean up
 del "{new_exe_path}"
 if exist "{backup_path}" del "{backup_path}"
-del "%~f0"
 
-REM Restart application
+REM Start new version
+echo Starting new version...
 start "" "{current_exe_path}"
+
+REM Delete this script with a delay
+ping -n 3 127.0.0.1 >nul
+del "%~f0"
 '''
         else:
             # Unix shell script (fallback)
@@ -643,9 +665,16 @@ start "" "{current_exe_path}"
 echo "Updating SFTP GUI Manager..."
 
 # Wait for main application to close
-sleep 3
+sleep 5
+
+# Kill any remaining instances
+pkill -f "{os.path.basename(current_exe_path)}" || true
+
+# Wait a bit more to ensure file is released
+sleep 2
 
 # Replace executable
+echo "Replacing executable..."
 if cp "{new_exe_path}" "{current_exe_path}"; then
     echo "Update successful!"
     
@@ -659,28 +688,110 @@ if cp "{new_exe_path}" "{current_exe_path}"; then
     # Restart application
     "{current_exe_path}" &
     
-    # Remove this script
-    rm -f "$0"
+    # Remove this script with a delay
+    (sleep 3; rm -f "$0") &
 else
     echo "Update failed! Restoring backup..."
     if [ -f "{backup_path}" ]; then
         cp "{backup_path}" "{current_exe_path}"
         chmod +x "{current_exe_path}"
     fi
+    echo "Press Enter to exit"
+    read
     exit 1
 fi
 '''
-        
+    
         # Write script
         with open(script_path, 'w') as f:
             f.write(script_content)
-            
+        
         # Make script executable on Unix
         if sys.platform != 'win32':
             os.chmod(script_path, 0o755)
-            
+        
         return script_path
         
+    def debug_update_process(self, message: str):
+        """Log debug information about the update process
+        
+        Args:
+            message: Debug message
+        """
+        try:
+            debug_dir = os.path.join(self.APPDATA_PATH, "update_logs")
+            os.makedirs(debug_dir, exist_ok=True)
+            
+            log_file = os.path.join(debug_dir, "update_log.txt")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f"[{timestamp}] {message}\n")
+        except Exception as e:
+            print(f"Debug logging failed: {e}")
+            
+    def verify_update_success(self, expected_version: str = None):
+        """Verify that the update was successful by checking the current version
+        
+        Args:
+            expected_version: Expected version after update (optional)
+        
+        Returns:
+            bool: True if update was successful
+        """
+        try:
+            # If no expected version provided, assume success
+            if not expected_version:
+                return True
+            
+            current_version = self.get_current_version()
+            success = current_version == expected_version
+            
+            if success:
+                self.debug_update_process(f"Update verification successful: running version {current_version}")
+            else:
+                self.debug_update_process(f"Update verification failed: expected {expected_version}, got {current_version}")
+                
+            return success
+        except Exception as e:
+            self.debug_update_process(f"Update verification error: {e}")
+            return False
+            
+    def show_update_debug_info(self):
+        """Show update debug information dialog"""
+        try:
+            debug_info = {
+                "Current Version": self.get_current_version(),
+                "Executable Path": self.get_executable_path(),
+                "Installation Path": self.get_installation_path(),
+                "User Data Path": self.APPDATA_PATH,
+                "Is Frozen": str(hasattr(sys, 'frozen')),
+                "Platform": sys.platform,
+                "Directory Writable": str(os.access(self.get_installation_path(), os.W_OK)),
+                "Update Settings": str(self.get_update_settings())
+            }
+            
+            # Format as text
+            info_text = "Update System Debug Information:\n\n"
+            for key, value in debug_info.items():
+                info_text += f"{key}: {value}\n"
+            
+            # Add log file content if exists
+            log_file = os.path.join(self.APPDATA_PATH, "update_logs", "update_log.txt")
+            if os.path.exists(log_file):
+                try:
+                    with open(log_file, 'r', encoding='utf-8') as f:
+                        log_content = f.read()
+                    info_text += "\n\nUpdate Log:\n" + log_content
+                except Exception as e:
+                    info_text += f"\n\nError reading log file: {e}"
+                
+            # Show dialog
+            QMessageBox.information(None, "Update Debug Information", info_text)
+        
+        except Exception as e:
+            QMessageBox.critical(None, "Debug Error", f"Failed to gather debug info: {e}")
+            
     def restart_application(self):
         """Restart the application"""
         try:

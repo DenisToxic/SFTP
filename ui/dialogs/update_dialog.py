@@ -151,14 +151,20 @@ class UpdateDialog(QDialog):
             # Update buttons
             self.install_btn = QPushButton("Install Update")
             self.install_btn.setDefault(True)
-            
+        
             self.skip_btn = QPushButton("Skip This Version")
             self.later_btn = QPushButton("Remind Me Later")
-            
+        
+            # Add debug button
+            self.debug_btn = QPushButton("Debug Info")
+            self.debug_btn.clicked.connect(self._show_debug_info)
+        
             if self.version_info.is_critical:
                 self.install_btn.setText("Install Critical Update")
                 self.install_btn.setStyleSheet("background-color: #d32f2f; color: white;")
-                
+        
+            button_layout.addWidget(self.debug_btn)
+            button_layout.addStretch()
             button_layout.addWidget(self.install_btn)
             button_layout.addWidget(self.skip_btn)
             button_layout.addWidget(self.later_btn)
@@ -167,11 +173,16 @@ class UpdateDialog(QDialog):
             self.check_now_btn = QPushButton("Check for Updates Now")
             self.ok_btn = QPushButton("OK")
             self.ok_btn.setDefault(True)
-            
+        
+            # Add debug button
+            self.debug_btn = QPushButton("Debug Info")
+            self.debug_btn.clicked.connect(self._show_debug_info)
+        
+            button_layout.addWidget(self.debug_btn)
             button_layout.addWidget(self.check_now_btn)
             button_layout.addStretch()
             button_layout.addWidget(self.ok_btn)
-            
+        
         layout.addLayout(button_layout)
         
     def _setup_connections(self):
@@ -231,6 +242,10 @@ class UpdateDialog(QDialog):
         """Save settings and close dialog"""
         # Settings are saved automatically via signal connections
         self.accept()
+
+    def _show_debug_info(self):
+        """Show update debug information"""
+        self.version_manager.show_update_debug_info()
 
 
 class UpdateProgressDialog(QDialog):
