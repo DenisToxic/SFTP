@@ -80,6 +80,35 @@ class AboutDialog(QDialog):
             
         layout.addWidget(version_group)
         
+        # Config information
+        config_group = QGroupBox("Configuration Information")
+        config_layout = QGridLayout(config_group)
+        
+        from utils.config import ConfigManager
+        config_manager = ConfigManager()
+        config_info = config_manager.get_config_info()
+        
+        row = 0
+        for key, value in config_info.items():
+            label = QLabel(f"{key.replace('_', ' ').title()}:")
+            label.setAlignment(Qt.AlignRight)
+            value_label = QLabel(str(value))
+            value_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            
+            # Color code some values
+            if key == "config_writable" and value == "True":
+                value_label.setStyleSheet("color: green;")
+            elif key == "config_writable" and value == "False":
+                value_label.setStyleSheet("color: red; font-weight: bold;")
+            elif key == "config_exists" and value == "True":
+                value_label.setStyleSheet("color: green;")
+            
+            config_layout.addWidget(label, row, 0)
+            config_layout.addWidget(value_label, row, 1)
+            row += 1
+            
+        layout.addWidget(config_group)
+        
         # Credits
         credits_group = QGroupBox("Credits")
         credits_layout = QVBoxLayout(credits_group)

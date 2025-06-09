@@ -12,7 +12,7 @@ from pathlib import Path
 class InstallerCreator:
     """Creates installer for SFTP GUI Manager"""
     
-    def __init__(self, app_version="1.0.0"):
+    def __init__(self, app_version="1.1.0"):
         """Initialize installer creator
         
         Args:
@@ -317,7 +317,7 @@ def main():
     if len(sys.argv) > 1:
         version = sys.argv[1]
     else:
-        version = "1.0.0"
+        version = "1.1.0"
         
     creator = InstallerCreator(version)
     success = creator.create_installer()

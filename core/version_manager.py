@@ -102,7 +102,7 @@ class VersionManager(QObject):
     update_failed = Signal(str)  # error_message
     
     # Configuration
-    CURRENT_VERSION = "1.0.0"
+    CURRENT_VERSION = "1.1.0"
     UPDATE_CHECK_URL = "https://api.github.com/repos/DenisToxic/SFTP/releases/latest"
     GITHUB_RELEASES_URL = "https://github.com/DenisToxic/SFTP/releases"
     UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000  # 24 hours in milliseconds

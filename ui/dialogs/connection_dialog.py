@@ -115,13 +115,23 @@ class ConnectionDialog(QDialog):
         host = self.host_edit.text()
         if host:
             password = self.password_edit.text() if self.save_password_cb.isChecked() else ""
-            self.config_manager.save_connection(
-                host,  # Use host as name
-                host,
-                int(self.port_edit.text()),
-                self.username_edit.text(),
-                password
-            )
+            try:
+                self.config_manager.save_connection(
+                    host,  # Use host as name
+                    host,
+                    int(self.port_edit.text()),
+                    self.username_edit.text(),
+                    password
+                )
+                print(f"✅ Connection saved successfully")
+            except Exception as e:
+                print(f"⚠️  Failed to save connection: {e}")
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(
+                    self, "Save Warning", 
+                    f"Connection details could not be saved:\n{str(e)}\n\n"
+                    f"You can still connect, but the connection won't be remembered."
+                )
             
         self.accept()
         

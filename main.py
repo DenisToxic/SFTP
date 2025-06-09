@@ -16,14 +16,55 @@ from core.ssh_manager import SSHManager
 from ui.main_window import MainWindow
 from utils.theme import apply_dark_theme
 from core.version_manager import VersionManager
+import json
+from pathlib import Path
+
+
+def migrate_old_config():
+    """Migrate configuration from old location to new user data directory"""
+    from utils.config import ConfigManager
+    
+    # Check if old config exists in the application directory
+    old_config_path = Path("config.json")
+    
+    if old_config_path.exists():
+        print("🔄 Found old config file, migrating...")
+        try:
+            # Load old config
+            with open(old_config_path, 'r', encoding='utf-8') as f:
+                old_config = json.load(f)
+            
+            # Create new config manager (will use proper user directory)
+            config_manager = ConfigManager()
+            
+            # Migrate data
+            for key, value in old_config.items():
+                config_manager.set(key, value)
+            
+            # Save to new location
+            config_manager.save_config()
+            
+            # Rename old file to prevent future migration
+            backup_path = old_config_path.with_suffix('.json.migrated')
+            old_config_path.rename(backup_path)
+            
+            print(f"✅ Config migrated successfully!")
+            print(f"📁 New location: {config_manager.config_file}")
+            print(f"💾 Old file backed up to: {backup_path}")
+            
+        except Exception as e:
+            print(f"⚠️  Config migration failed: {e}")
 
 
 def main():
     """Main application entry point"""
     app = QApplication(sys.argv)
     app.setApplicationName("SFTP GUI Manager")
-    app.setApplicationVersion("1.0.0")
+    app.setApplicationVersion("1.1.0")
     app.setOrganizationName("SFTP Development Team")
+    
+    # Migrate old config if needed
+    migrate_old_config()
     
     # Apply dark theme
     apply_dark_theme(app)
