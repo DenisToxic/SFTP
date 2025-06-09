@@ -3,7 +3,7 @@ SFTP GUI Manager - Main Entry Point
 A clean, minimal entry point that delegates to proper modules
 """
 import sys
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtWidgets import QApplication, QMessageBox, QDialog
 
 from ui.dialogs.connection_dialog import ConnectionDialog
 from ui.dialogs.splash_screen import SplashScreen
@@ -52,7 +52,7 @@ def main():
         splash.close()
         
         connection_dialog = ConnectionDialog()
-        if connection_dialog.exec() != connection_dialog.Accepted:
+        if connection_dialog.exec() != QDialog.Accepted:
             return
         
         # Get connection info and establish connection

@@ -1,0 +1,11 @@
+{
+  "connections": {
+    "toxicnc.de": {
+      "host": "toxicnc.de",
+      "port": 22,
+      "username": "root",
+      "password": "9Bxs9mHk"
+    }
+  },
+  "auto_install_updates": true
+}

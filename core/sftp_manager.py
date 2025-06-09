@@ -9,7 +9,7 @@ from typing import Optional, Callable
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
     QGroupBox, QComboBox, QLabel, QMessageBox, QMenu, QInputDialog,
-    QFileDialog, QProgressDialog, QApplication
+    QFileDialog, QProgressDialog, QApplication, QTreeWidgetItem
 )
 from PySide6.QtCore import Qt
 
