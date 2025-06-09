@@ -9,7 +9,6 @@
 [![PySide6](https://img.shields.io/badge/PySide6-6.5.0%2B-brightgreen.svg?style=for-the-badge)](https://wiki.qt.io/Qt_for_Python)
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
 
-<img src="https://via.placeholder.com/800x450.png?text=SFTP+GUI+Manager+Screenshot" alt="SFTP GUI Manager Screenshot" width="800"/>
 
 *Seamlessly manage remote files with a powerful, intuitive interface*
 
@@ -76,7 +75,6 @@
 ### Connecting to a Server
 
 <div align="center">
-  <img src="https://via.placeholder.com/600x300.png?text=Connection+Dialog" alt="Connection Dialog" width="600"/>
 </div>
 
 1. Launch the application
@@ -108,7 +106,6 @@
 ### 💻 Terminal Usage
 
 <div align="center">
-  <img src="https://via.placeholder.com/600x300.png?text=Terminal+Interface" alt="Terminal Interface" width="600"/>
 </div>
 
 The integrated terminal provides full SSH access to your server:
@@ -255,6 +252,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Made with ❤️ by the SFTP GUI Manager Team**
 
 [![GitHub Stars](https://img.shields.io/github/stars/DenisToxic/SFTP?style=social)](https://github.com/DenisToxic/SFTP)
-[![Twitter Follow](https://img.shields.io/twitter/follow/SFTPManager?style=social)](https://twitter.com/SFTPManager)
 
 </div>
