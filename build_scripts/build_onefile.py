@@ -181,7 +181,7 @@ def create_distribution_package():
     print("📦 Creating distribution package...")
     
     # Create distribution directory
-    dist_package_dir = Path('dist/SFTP_GUI_Manager_v1.0.0')
+    dist_package_dir = Path('dist/SFTP_GUI_Manager_v1.1.1')
     
     try:
         # Remove existing package directory
@@ -195,7 +195,7 @@ def create_distribution_package():
         shutil.copy2(exe_path, dist_package_dir / 'SFTPGUIManager.exe')
         
         # Create README for distribution
-        readme_content = """SFTP GUI Manager v1.0.0
+        readme_content = """SFTP GUI Manager v1.1.1
 
 A modern, feature-rich SFTP client with integrated terminal support.
 
@@ -243,7 +243,7 @@ Licensed under the MIT License
         print(f"✅ Distribution package created: {dist_package_dir}")
         
         # Create ZIP archive
-        zip_path = Path('dist/SFTP_GUI_Manager_v1.0.0.zip')
+        zip_path = Path('dist/SFTP_GUI_Manager_v1.1.1.zip')
         shutil.make_archive(str(zip_path.with_suffix('')), 'zip', str(dist_package_dir))
         print(f"📦 ZIP archive created: {zip_path}")
         
@@ -283,8 +283,8 @@ def main():
     print("\n✅ Build process completed!")
     print("\nOutput files:")
     print("- dist/SFTPGUIManager.exe (Single executable file)")
-    print("- dist/SFTP_GUI_Manager_v1.0.0/ (Distribution package)")
-    print("- dist/SFTP_GUI_Manager_v1.0.0.zip (ZIP archive)")
+    print("- dist/SFTP_GUI_Manager_v1.1.1/ (Distribution package)")
+    print("- dist/SFTP_GUI_Manager_v1.1.1.zip (ZIP archive)")
     
     print("\n🎉 Your application is ready to distribute!")
     print("The single .exe file contains everything needed to run the application.")

@@ -95,10 +95,20 @@ class FileManager(QObject):
         """Change current directory
         
         Args:
-            path: Remote directory path
+            path: Remote directory path (can be relative or absolute)
         """
         self.path_history.append(self.current_path)
-        self.list_directory(path)
+        
+        # If path is relative (just a directory name), join with current path
+        if not path.startswith('/') and not path.startswith('\\'):
+            # Relative path - join with current directory
+            import posixpath
+            new_path = posixpath.join(self.current_path, path)
+        else:
+            # Absolute path
+            new_path = path
+        
+        self.list_directory(new_path)
         
     def go_back(self) -> bool:
         """Go back to previous directory

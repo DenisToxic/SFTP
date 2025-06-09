@@ -11,7 +11,7 @@ from pathlib import Path
 class SFTPBuilder:
     """Builder for SFTP GUI Manager"""
     
-    def __init__(self, version="1.1.0"):
+    def __init__(self, version="1.1.1"):
         """Initialize builder
         
         Args:
@@ -223,7 +223,7 @@ https://github.com/DenisToxic/SFTP
 
 def main():
     """Main function"""
-    version = sys.argv[1] if len(sys.argv) > 1 else "1.1.0"
+    version = sys.argv[1] if len(sys.argv) > 1 else "1.1.1"
     
     builder = SFTPBuilder(version)
     success = builder.build()

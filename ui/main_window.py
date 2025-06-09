@@ -233,9 +233,13 @@ class MainWindow(QMainWindow):
         
     def _show_command_shortcuts(self):
         """Show command shortcuts dialog"""
-        dialog = CommandShortcutsDialog(self)
-        dialog.shortcut_executed.connect(self._execute_command_shortcut)
-        dialog.show()
+        try:
+            dialog = CommandShortcutsDialog(self)
+            dialog.shortcut_executed.connect(self._execute_command_shortcut)
+            dialog.show()  # Use show() instead of exec() for non-modal dialog
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Error", f"Failed to open command shortcuts dialog:\n{str(e)}")
         
     def _execute_command_shortcut(self, command: str):
         """Execute a command shortcut in the terminal

@@ -121,10 +121,13 @@ class FileBrowserWidget(QWidget):
         file_info = item.data(0, Qt.UserRole)
         
         if file_info.is_directory:
-            # Navigate into directory
-            self.file_manager.change_directory(
-                posixpath.join(self.file_manager.current_path, file_info.filename)
-            )
+            # Navigate into directory - use the filename directly
+            try:
+                self.file_manager.change_directory(file_info.filename)
+                self.refresh()
+            except Exception as e:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.critical(self, "Navigation Error", f"Failed to enter directory: {e}")
         else:
             # Open file for editing
             self._open_file(file_info.filename)

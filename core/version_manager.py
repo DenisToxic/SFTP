@@ -101,8 +101,8 @@ class VersionManager(QObject):
     update_installed = Signal()
     update_failed = Signal(str)  # error_message
     
-    # Configuration
-    CURRENT_VERSION = "1.0.0"
+    # Configuration - UPDATE THIS TO 1.1.1 for the new version
+    CURRENT_VERSION = "1.1.1"
     UPDATE_CHECK_URL = "https://api.github.com/repos/DenisToxic/SFTP/releases/latest"
     GITHUB_RELEASES_URL = "https://github.com/DenisToxic/SFTP/releases"
     UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000  # 24 hours in milliseconds
@@ -570,8 +570,8 @@ class VersionManager(QObject):
             except Exception as e:
                 print(f"Warning: Could not create backup: {e}")
         
-            # Create update script with improved file handling
-            update_script = self._create_update_script(new_exe_path, current_exe, backup_path)
+            # Create robust update script
+            update_script = self._create_robust_update_script(new_exe_path, current_exe, backup_path)
         
             # Show confirmation dialog
             reply = QMessageBox.question(
@@ -587,8 +587,8 @@ class VersionManager(QObject):
             if reply == QMessageBox.Yes:
                 # Execute update script and exit
                 if sys.platform == 'win32':
-                    # Use start /wait to ensure the script completes before continuing
-                    subprocess.Popen(['cmd', '/c', 'start', '/wait', update_script], shell=True)
+                    # Use cmd /c to run the batch file
+                    subprocess.Popen(['cmd', '/c', update_script], shell=False)
                 else:
                     subprocess.Popen(['bash', update_script])
             
@@ -605,8 +605,8 @@ class VersionManager(QObject):
         except Exception as e:
             self.update_failed.emit(f"Installation failed: {str(e)}")
             
-    def _create_update_script(self, new_exe_path: str, current_exe_path: str, backup_path: str) -> str:
-        """Create update script to replace executable
+    def _create_robust_update_script(self, new_exe_path: str, current_exe_path: str, backup_path: str) -> str:
+        """Create robust update script that handles Windows file locking
         
         Args:
             new_exe_path: Path to new executable
@@ -617,50 +617,133 @@ class VersionManager(QObject):
             Path to update script
         """
         script_dir = os.path.dirname(new_exe_path)
-    
+        
         if sys.platform == 'win32':
-            # Windows batch script with improved file handling
-            script_path = os.path.join(script_dir, "update.bat")
+            # Robust Windows batch script
+            script_path = os.path.join(script_dir, "robust_update.bat")
+            exe_name = os.path.basename(current_exe_path)
+            
             script_content = f'''@echo off
-echo Updating SFTP GUI Manager...
+setlocal enabledelayedexpansion
 
-REM Wait for main application to close
+echo Updating SFTP GUI Manager...
+echo Aktualisiere SFTP GUI Manager...
+
+REM Wait for main application to close gracefully
+echo Waiting for application to close...
+echo Warte auf Schließen der Anwendung...
 timeout /t 5 /nobreak >nul
 
-REM Kill any remaining instances
-taskkill /F /IM "{os.path.basename(current_exe_path)}" /T >nul 2>&1
+REM Force kill any remaining instances with multiple attempts
+echo Terminating any remaining processes...
+echo Beende verbleibende Prozesse...
 
-REM Wait a bit more to ensure file is released
-timeout /t 2 /nobreak >nul
-
-REM Replace executable
-echo Replacing executable...
-copy /Y "{new_exe_path}" "{current_exe_path}"
-if errorlevel 1 (
-    echo Update failed! Restoring backup...
-    if exist "{backup_path}" (
-        copy /Y "{backup_path}" "{current_exe_path}"
-    )
-    echo Press any key to exit
-    pause >nul
-    exit /b 1
+for /L %%i in (1,1,5) do (
+    taskkill /F /IM "{exe_name}" /T >nul 2>&1
+    timeout /t 1 /nobreak >nul
 )
 
-REM Clean up
-del "{new_exe_path}"
-if exist "{backup_path}" del "{backup_path}"
+REM Additional wait to ensure file handles are released
+echo Ensuring file handles are released...
+echo Stelle sicher, dass Datei-Handles freigegeben werden...
+timeout /t 3 /nobreak >nul
 
-REM Start new version
+REM Try to delete the current executable first (this releases any locks)
+echo Preparing for file replacement...
+echo Bereite Dateiaustausch vor...
+
+REM Create a temporary copy of the current exe with a different name
+set "temp_old_exe={current_exe_path}.old"
+if exist "!temp_old_exe!" del "!temp_old_exe!" >nul 2>&1
+
+REM Try to move (rename) the current executable instead of copying over it
+echo Attempting to move current executable...
+echo Versuche aktuelle Datei zu verschieben...
+move "{current_exe_path}" "!temp_old_exe!" >nul 2>&1
+
+if errorlevel 1 (
+    echo Failed to move current executable, trying alternative method...
+    echo Verschieben fehlgeschlagen, versuche alternative Methode...
+    
+    REM Alternative: Try to copy over with retries
+    for /L %%i in (1,1,10) do (
+        echo Attempt %%i of 10...
+        echo Versuch %%i von 10...
+        
+        copy /Y "{new_exe_path}" "{current_exe_path}" >nul 2>&1
+        if not errorlevel 1 (
+            echo File replacement successful on attempt %%i
+            echo Dateiaustausch erfolgreich bei Versuch %%i
+            goto :success
+        )
+        
+        echo Attempt %%i failed, waiting and retrying...
+        echo Versuch %%i fehlgeschlagen, warte und versuche erneut...
+        timeout /t 2 /nobreak >nul
+    )
+    
+    echo All copy attempts failed! Restoring backup...
+    echo Alle Kopieversuche fehlgeschlagen! Stelle Backup wieder her...
+    goto :restore_backup
+)
+
+REM Now copy the new executable to the original location
+echo Copying new executable...
+echo Kopiere neue Datei...
+copy /Y "{new_exe_path}" "{current_exe_path}" >nul 2>&1
+
+if errorlevel 1 (
+    echo Copy failed! Restoring original executable...
+    echo Kopieren fehlgeschlagen! Stelle ursprüngliche Datei wieder her...
+    move "!temp_old_exe!" "{current_exe_path}" >nul 2>&1
+    goto :restore_backup
+)
+
+:success
+echo Update successful!
+echo Update erfolgreich!
+
+REM Clean up temporary files
+if exist "!temp_old_exe!" del "!temp_old_exe!" >nul 2>&1
+if exist "{new_exe_path}" del "{new_exe_path}" >nul 2>&1
+if exist "{backup_path}" del "{backup_path}" >nul 2>&1
+
+REM Start the new version
 echo Starting new version...
+echo Starte neue Version...
 start "" "{current_exe_path}"
 
-REM Delete this script with a delay
-ping -n 3 127.0.0.1 >nul
-del "%~f0"
+REM Wait a moment then delete this script
+timeout /t 2 /nobreak >nul
+del "%~f0" >nul 2>&1
+exit /b 0
+
+:restore_backup
+echo Update failed! Restoring backup...
+echo Update fehlgeschlagen! Stelle Backup wieder her...
+
+if exist "{backup_path}" (
+    copy /Y "{backup_path}" "{current_exe_path}" >nul 2>&1
+    if not errorlevel 1 (
+        echo Backup restored successfully
+        echo Backup erfolgreich wiederhergestellt
+    ) else (
+        echo Failed to restore backup!
+        echo Backup-Wiederherstellung fehlgeschlagen!
+    )
+) else (
+    echo No backup file found!
+    echo Keine Backup-Datei gefunden!
+)
+
+echo Press any key to exit
+echo Beliebige Taste zum Beenden drücken
+pause >nul
+exit /b 1
 '''
         else:
             # Unix shell script (fallback)
-            script_path = os.path.join(script_dir, "update.sh")
+            script_path = os.path.join(script_dir, "robust_update.sh")
             script_content = f'''#!/bin/bash
 echo "Updating SFTP GUI Manager..."
 
@@ -669,41 +752,51 @@ sleep 5
 
 # Kill any remaining instances
 pkill -f "{os.path.basename(current_exe_path)}" || true
-
-# Wait a bit more to ensure file is released
 sleep 2
 
-# Replace executable
-echo "Replacing executable..."
-if cp "{new_exe_path}" "{current_exe_path}"; then
-    echo "Update successful!"
+# Try to move current executable first
+temp_old_exe="{current_exe_path}.old"
+if mv "{current_exe_path}" "$temp_old_exe"; then
+    echo "Moved current executable successfully"
     
-    # Make executable
-    chmod +x "{current_exe_path}"
-    
-    # Clean up
-    rm -f "{new_exe_path}"
-    rm -f "{backup_path}"
-    
-    # Restart application
-    "{current_exe_path}" &
-    
-    # Remove this script with a delay
-    (sleep 3; rm -f "$0") &
-else
-    echo "Update failed! Restoring backup..."
-    if [ -f "{backup_path}" ]; then
-        cp "{backup_path}" "{current_exe_path}"
+    # Copy new executable
+    if cp "{new_exe_path}" "{current_exe_path}"; then
+        echo "Update successful!"
         chmod +x "{current_exe_path}"
+        
+        # Clean up
+        rm -f "$temp_old_exe"
+        rm -f "{new_exe_path}"
+        rm -f "{backup_path}"
+        
+        # Restart application
+        "{current_exe_path}" &
+        
+        # Remove this script
+        (sleep 3; rm -f "$0") &
+        exit 0
+    else
+        echo "Copy failed! Restoring original..."
+        mv "$temp_old_exe" "{current_exe_path}"
     fi
-    echo "Press Enter to exit"
-    read
-    exit 1
 fi
+
+echo "Update failed! Restoring backup..."
+if [ -f "{backup_path}" ]; then
+    cp "{backup_path}" "{current_exe_path}"
+    chmod +x "{current_exe_path}"
+    echo "Backup restored"
+else
+    echo "No backup found!"
+fi
+
+echo "Press Enter to exit"
+read
+exit 1
 '''
     
         # Write script
-        with open(script_path, 'w') as f:
+        with open(script_path, 'w', encoding='utf-8') as f:
             f.write(script_content)
         
         # Make script executable on Unix
@@ -729,33 +822,6 @@ fi
                 f.write(f"[{timestamp}] {message}\n")
         except Exception as e:
             print(f"Debug logging failed: {e}")
-            
-    def verify_update_success(self, expected_version: str = None):
-        """Verify that the update was successful by checking the current version
-        
-        Args:
-            expected_version: Expected version after update (optional)
-        
-        Returns:
-            bool: True if update was successful
-        """
-        try:
-            # If no expected version provided, assume success
-            if not expected_version:
-                return True
-            
-            current_version = self.get_current_version()
-            success = current_version == expected_version
-            
-            if success:
-                self.debug_update_process(f"Update verification successful: running version {current_version}")
-            else:
-                self.debug_update_process(f"Update verification failed: expected {expected_version}, got {current_version}")
-                
-            return success
-        except Exception as e:
-            self.debug_update_process(f"Update verification error: {e}")
-            return False
             
     def show_update_debug_info(self):
         """Show update debug information dialog"""

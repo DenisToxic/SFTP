@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 
-def create_installer(version="1.1.0"):
+def create_installer(version="1.1.1"):
     """Create installer for SFTP GUI Manager
     
     Args:
@@ -109,7 +109,7 @@ end;
 
 def main():
     """Main function"""
-    version = sys.argv[1] if len(sys.argv) > 1 else "1.1.0"
+    version = sys.argv[1] if len(sys.argv) > 1 else "1.1.1"
     create_installer(version)
 
 

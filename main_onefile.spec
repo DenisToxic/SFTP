@@ -4,8 +4,8 @@ import sys
 import os
 from pathlib import Path
 
-# Get the project directory
-project_dir = Path(__file__).parent
+# Get the project directory - use current working directory instead of __file__
+project_dir = Path(os.getcwd())
 
 block_cipher = None
 

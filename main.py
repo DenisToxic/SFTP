@@ -60,7 +60,7 @@ def main():
     """Main application entry point"""
     app = QApplication(sys.argv)
     app.setApplicationName("SFTP GUI Manager")
-    app.setApplicationVersion("1.1.0")
+    app.setApplicationVersion("1.1.1")
     app.setOrganizationName("SFTP Development Team")
     
     # Migrate old config if needed

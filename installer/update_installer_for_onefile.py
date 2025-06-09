@@ -29,13 +29,13 @@ def create_onefile_installer():
     iss_content = f'''[Setup]
 AppId={{{{12345678-1234-1234-1234-123456789012}}}}
 AppName=SFTP GUI Manager
-AppVersion=1.0.0
+AppVersion=1.1.1
 AppPublisher=SFTP Development Team
 AppPublisherURL=https://github.com/DenisToxic/SFTP
 DefaultDirName={{autopf}}\\SFTP
 DefaultGroupName=SFTP GUI Manager
 OutputDir={output_dir}
-OutputBaseFilename=SFTPGUIManager_v1.0.0_Setup
+OutputBaseFilename=SFTPGUIManager_v1.1.1_Setup
 Compression=lzma
 SolidCompression=yes
 PrivilegesRequired=admin

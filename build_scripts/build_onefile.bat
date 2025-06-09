@@ -30,8 +30,8 @@ if %ERRORLEVEL% EQU 0 (
     echo.
     echo Output files:
     echo - dist\SFTPGUIManager.exe
-    echo - dist\SFTP_GUI_Manager_v1.0.0\
-    echo - dist\SFTP_GUI_Manager_v1.0.0.zip
+    echo - dist\SFTP_GUI_Manager_v1.1.1\
+    echo - dist\SFTP_GUI_Manager_v1.1.1.zip
     echo.
     echo The single .exe file is ready to distribute!
     echo No installation required - just run the .exe file.

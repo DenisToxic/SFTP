@@ -4,7 +4,7 @@ echo "Building SFTP GUI Manager Installer"
 echo "===================================="
 
 # Get version from argument or use default
-VERSION=${1:-"1.1.0"}
+VERSION=${1:-"1.1.1"}
 echo "Version: $VERSION"
 
 # Check if PyInstaller dist folder exists

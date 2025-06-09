@@ -181,9 +181,17 @@ class CommandShortcutsDialog(QDialog):
             parent: Parent widget
         """
         super().__init__(parent)
-        self.config_manager = ConfigManager()
-        self._setup_ui()
-        self._load_shortcuts()
+        try:
+            self.config_manager = ConfigManager()
+            self._setup_ui()
+            self._load_shortcuts()
+        except Exception as e:
+            print(f"Error initializing command shortcuts dialog: {e}")
+            # Show a simple error message
+            from PySide6.QtWidgets import QLabel, QVBoxLayout
+            layout = QVBoxLayout(self)
+            error_label = QLabel(f"Error loading shortcuts: {str(e)}")
+            layout.addWidget(error_label)
         
     def _setup_ui(self):
         """Setup user interface"""

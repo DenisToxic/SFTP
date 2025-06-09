@@ -4,7 +4,7 @@
 
 **A modern, feature-rich SFTP client with integrated terminal support**
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg?style=for-the-badge)](https://github.com/DenisToxic/SFTP/releases)
+[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg?style=for-the-badge)](https://github.com/DenisToxic/SFTP/releases)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![PySide6](https://img.shields.io/badge/PySide6-6.5.0%2B-brightgreen.svg?style=for-the-badge)](https://wiki.qt.io/Qt_for_Python)
 [![License](https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge)](LICENSE)
@@ -216,8 +216,8 @@ SFTP-GUI-Manager/
 
 | Status | Feature | Target Release |
 |:------:|---------|:-------------:|
-| 🔄 | SSH key authentication | v1.1.0 |
-| 🔄 | Bookmark system | v1.1.0 |
+| 🔄 | SSH key authentication | v1.1.1 |
+| 🔄 | Bookmark system | v1.1.1 |
 | 📅 | File synchronization | v1.2.0 |
 | 📅 | Batch operations | v1.2.0 |
 | 🔮 | Plugin system | v1.3.0 |
