@@ -1,13 +1,13 @@
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}}
 AppName=SFTP GUI Manager
-AppVersion=1.1.1
+AppVersion=1.2.0
 AppPublisher=SFTP Development Team
 AppPublisherURL=https://github.com/DenisToxic/SFTP
 DefaultDirName={autopf}\SFTP
 DefaultGroupName=SFTP GUI Manager
 OutputDir=S:\SFTP\github\installer\output
-OutputBaseFilename=SFTPGUIManager_v1.1.1_Setup
+OutputBaseFilename=SFTPGUIManager_v1.2.0_Setup
 Compression=lzma
 SolidCompression=yes
 PrivilegesRequired=admin

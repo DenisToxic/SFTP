@@ -4,7 +4,7 @@ echo ===============================
 
 REM Get version from argument or use default
 set VERSION=%1
-if "%VERSION%"=="" set VERSION=1.1.1
+if "%VERSION%"=="" set VERSION=1.0.0
 
 echo Building version: %VERSION%
 echo.

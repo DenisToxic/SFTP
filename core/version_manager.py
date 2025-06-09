@@ -101,8 +101,8 @@ class VersionManager(QObject):
     update_installed = Signal()
     update_failed = Signal(str)  # error_message
     
-    # Configuration - UPDATE THIS TO 1.1.1 for the new version
-    CURRENT_VERSION = "1.1.1"
+    # Configuration - UPDATE THIS TO 1.1.0 for the new version
+    CURRENT_VERSION = "1.2.0"
     UPDATE_CHECK_URL = "https://api.github.com/repos/DenisToxic/SFTP/releases/latest"
     GITHUB_RELEASES_URL = "https://github.com/DenisToxic/SFTP/releases"
     UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000  # 24 hours in milliseconds
