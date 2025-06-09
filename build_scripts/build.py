@@ -45,7 +45,7 @@ class SFTPBuilder:
         """Check required dependencies"""
         print("📋 Checking dependencies...")
         
-        required = ['PySide6', 'paramiko', 'winpty', 'pyinstaller']
+        required = ['PySide6', 'paramiko', 'winpty']
         optional = ['requests', 'packaging']
         
         missing_required = []
@@ -58,7 +58,7 @@ class SFTPBuilder:
             except ImportError:
                 missing_required.append(package)
                 print(f"  ❌ {package}")
-        
+    
         for package in optional:
             try:
                 __import__(package)
@@ -66,16 +66,34 @@ class SFTPBuilder:
             except ImportError:
                 missing_optional.append(package)
                 print(f"  ⚠️  {package} (optional)")
-        
+    
+        # Check PyInstaller separately since it's a build tool
+        try:
+            import PyInstaller
+            print(f"  ✅ PyInstaller")
+        except ImportError:
+            try:
+                # Try to run PyInstaller as a module
+                result = subprocess.run([sys.executable, '-m', 'PyInstaller', '--version'], 
+                                      capture_output=True, text=True)
+                if result.returncode == 0:
+                    print(f"  ✅ PyInstaller (module)")
+                else:
+                    missing_required.append('pyinstaller')
+                    print(f"  ❌ PyInstaller")
+            except:
+                missing_required.append('pyinstaller')
+                print(f"  ❌ PyInstaller")
+    
         if missing_required:
             print(f"\n❌ Missing required packages: {', '.join(missing_required)}")
             print(f"Install with: pip install {' '.join(missing_required)}")
             return False
-            
+        
         if missing_optional:
             print(f"\n⚠️  Missing optional packages: {', '.join(missing_optional)}")
             print("Some features may be disabled.")
-            
+        
         return True
         
     def build_onefile(self):
