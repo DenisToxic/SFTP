@@ -1,7 +1,8 @@
 """Main application window with version control integration"""
 import stat
 from PySide6.QtWidgets import (
-    QMainWindow, QSplitter, QToolBar, QStatusBar, QMessageBox, QMenuBar
+    QMainWindow, QSplitter, QToolBar, QStatusBar, QMessageBox, QMenuBar,
+    QFileDialog
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
@@ -10,9 +11,9 @@ from core.ssh_manager import SSHManager
 from core.file_manager import FileManager
 from core.version_manager import VersionManager
 from ui.widgets.terminal_widget import TerminalWidget
+from ui.widgets.file_browser_widget import FileBrowserWidget
 from ui.dialogs.update_dialog import UpdateDialog
 from ui.dialogs.about_dialog import AboutDialog
-from core.sftp_manager import SftpManager
 from ui.dialogs.command_shortcuts_dialog import CommandShortcutsDialog
 
 
@@ -59,19 +60,12 @@ class MainWindow(QMainWindow):
             self.ssh_manager.password
         )
         
-        # Create SFTP manager widget
-        self.sftp_manager = SftpManager(
-            self.ssh_manager.ssh_client,
-            self.ssh_manager.sftp_client,
-            self.ssh_manager.host,
-            self.ssh_manager.port,
-            self.ssh_manager.username,
-            self.ssh_manager.password
-        )
+        # Create file browser widget
+        self.file_browser = FileBrowserWidget(self.file_manager)
         
         # Add widgets to splitter
         splitter.addWidget(self.terminal_widget)
-        splitter.addWidget(self.sftp_manager)
+        splitter.addWidget(self.file_browser)
         splitter.setSizes([600, 800])
         
         self.setCentralWidget(splitter)
@@ -90,29 +84,32 @@ class MainWindow(QMainWindow):
         
         file_menu.addSeparator()
         
+        upload_action = QAction("Upload File", self)
+        upload_action.setShortcut("Ctrl+U")
+        upload_action.triggered.connect(self._upload_file)
+        file_menu.addAction(upload_action)
+        
+        download_action = QAction("Download File", self)
+        download_action.setShortcut("Ctrl+D")
+        download_action.triggered.connect(self._download_file)
+        file_menu.addAction(download_action)
+        
+        file_menu.addSeparator()
+        
         exit_action = QAction("Exit", self)
         exit_action.setShortcut("Ctrl+Q")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
         
-        # Shortcuts menu
-        shortcuts_menu = menubar.addMenu("Shortcuts")
-        
-        manage_shortcuts_action = QAction("⚡ Manage Shortcuts", self)
-        manage_shortcuts_action.setShortcut("Ctrl+Shift+C")
-        manage_shortcuts_action.triggered.connect(self._show_command_shortcuts)
-        shortcuts_menu.addAction(manage_shortcuts_action)
-        
-        # Add some predefined shortcut categories as submenus
-        system_menu = shortcuts_menu.addMenu("System")
-        file_menu = shortcuts_menu.addMenu("File Operations")
-        network_menu = shortcuts_menu.addMenu("Network")
-        
-        # We'll populate these dynamically in a separate method
-        self._populate_shortcut_menus(system_menu, file_menu, network_menu)
-        
         # Tools menu
         tools_menu = menubar.addMenu("Tools")
+        
+        shortcuts_action = QAction("⚡ Command Shortcuts", self)
+        shortcuts_action.setShortcut("Ctrl+Shift+C")
+        shortcuts_action.triggered.connect(self._show_command_shortcuts)
+        tools_menu.addAction(shortcuts_action)
+        
+        tools_menu.addSeparator()
         
         settings_action = QAction("Update Settings", self)
         settings_action.triggered.connect(self._show_update_settings)
@@ -130,56 +127,6 @@ class MainWindow(QMainWindow):
         about_action = QAction("About", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
-
-    def _populate_shortcut_menus(self, system_menu, file_menu, network_menu):
-        """Populate shortcut menus with available shortcuts
-        
-        Args:
-            system_menu: System shortcuts menu
-            file_menu: File operations shortcuts menu
-            network_menu: Network shortcuts menu
-        """
-        from utils.config import ConfigManager
-        
-        # Get shortcuts from config
-        config_manager = ConfigManager()
-        shortcuts = config_manager.get_command_shortcuts()
-        
-        # Group by category
-        categories = {}
-        for name, data in shortcuts.items():
-            category = data.get("category", "General")
-            if category not in categories:
-                categories[category] = []
-            categories[category].append((name, data))
-        
-        # Add shortcuts to appropriate menus
-        if "System" in categories:
-            for name, data in sorted(categories["System"]):
-                action = QAction(name, self)
-                action.triggered.connect(lambda checked=False, cmd=data.get("command", ""): 
-                                        self._execute_command_shortcut(cmd))
-                if data.get("description"):
-                    action.setStatusTip(data.get("description"))
-                system_menu.addAction(action)
-        
-        if "File Operations" in categories:
-            for name, data in sorted(categories["File Operations"]):
-                action = QAction(name, self)
-                action.triggered.connect(lambda checked=False, cmd=data.get("command", ""): 
-                                        self._execute_command_shortcut(cmd))
-                if data.get("description"):
-                    action.setStatusTip(data.get("description"))
-                file_menu.addAction(action)
-        
-        if "Network" in categories:
-            for name, data in sorted(categories["Network"]):
-                action = QAction(name, self)
-                action.triggered.connect(lambda checked=False, cmd=data.get("command", ""): 
-                                        self._execute_command_shortcut(cmd))
-                if data.get("description"):
-                    action.setStatusTip(data.get("description"))
-                network_menu.addAction(action)
         
     def _create_toolbar(self):
         """Create application toolbar"""
@@ -231,25 +178,19 @@ class MainWindow(QMainWindow):
     def _refresh_files(self):
         """Refresh file browser"""
         try:
-            self.sftp_manager.load_remote_directory(self.sftp_manager.current_path)
+            self.file_browser.refresh()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to refresh: {e}")
             
     def _upload_file(self):
         """Upload file"""
-        self.sftp_manager._upload_file_dialog()
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select file to upload")
+        if file_path:
+            self.file_browser.upload_file(file_path)
         
     def _download_file(self):
         """Download selected file"""
-        selected_items = self.sftp_manager.file_browser.selectedItems()
-        if selected_items:
-            file_info = selected_items[0].data(0, Qt.UserRole)
-            if not stat.S_ISDIR(file_info.st_mode):
-                self.sftp_manager.download_file(file_info.filename)
-            else:
-                QMessageBox.information(self, "Info", "Cannot download directories")
-        else:
-            QMessageBox.information(self, "Info", "No file selected")
+        self.file_browser.download_selected_file()
         
     def _disconnect(self):
         """Disconnect from server"""
@@ -290,6 +231,24 @@ class MainWindow(QMainWindow):
         dialog = AboutDialog(self)
         dialog.exec()
         
+    def _show_command_shortcuts(self):
+        """Show command shortcuts dialog"""
+        dialog = CommandShortcutsDialog(self)
+        dialog.shortcut_executed.connect(self._execute_command_shortcut)
+        dialog.show()
+        
+    def _execute_command_shortcut(self, command: str):
+        """Execute a command shortcut in the terminal
+        
+        Args:
+            command: Command to execute
+        """
+        if hasattr(self, 'terminal_widget') and self.terminal_widget:
+            self.terminal_widget.write_input(command + "\r")
+            self.status_bar.showMessage(f"Executed shortcut: {command[:50]}...", 3000)
+        else:
+            QMessageBox.warning(self, "No Terminal", "No active terminal session to execute command.")
+        
     def _on_directory_changed(self, path: str):
         """Handle directory change"""
         self.status_bar.showMessage(f"Current directory: {path}")
@@ -297,7 +256,7 @@ class MainWindow(QMainWindow):
     def _on_file_uploaded(self, filename: str):
         """Handle file upload completion"""
         self.status_bar.showMessage(f"Uploaded: {filename}", 3000)
-        self._refresh_files()
+        self.file_browser.refresh()
         
     def _on_file_downloaded(self, filename: str):
         """Handle file download completion"""
@@ -328,22 +287,3 @@ class MainWindow(QMainWindow):
         """Handle window close event"""
         self.ssh_manager.disconnect()
         event.accept()
-        
-    def _show_command_shortcuts(self):
-        """Show command shortcuts dialog"""
-        dialog = CommandShortcutsDialog(self)
-        dialog.shortcut_executed.connect(self._execute_command_shortcut)
-        dialog.show()  # Non-modal dialog
-    
-    def _execute_command_shortcut(self, command: str):
-        """Execute a command shortcut in the terminal
-        
-        Args:
-            command: Command to execute
-        """
-        if hasattr(self, 'terminal_widget') and self.terminal_widget:
-            # Send command to terminal
-            self.terminal_widget.write_input(command + "\r")
-            self.status_bar.showMessage(f"Executed shortcut: {command[:50]}...", 3000)
-        else:
-            QMessageBox.warning(self, "No Terminal", "No active terminal session to execute command.")

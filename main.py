@@ -1,9 +1,14 @@
 """
 SFTP GUI Manager - Main Entry Point
-A clean, minimal entry point that delegates to proper modules
+A modern, feature-rich SFTP client with integrated terminal support
 """
 import sys
+import os
 from PySide6.QtWidgets import QApplication, QMessageBox, QDialog
+
+# Add project root to path for imports
+project_root = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, project_root)
 
 from ui.dialogs.connection_dialog import ConnectionDialog
 from ui.dialogs.splash_screen import SplashScreen
@@ -16,6 +21,9 @@ from core.version_manager import VersionManager
 def main():
     """Main application entry point"""
     app = QApplication(sys.argv)
+    app.setApplicationName("SFTP GUI Manager")
+    app.setApplicationVersion("1.0.0")
+    app.setOrganizationName("SFTP Development Team")
     
     # Apply dark theme
     apply_dark_theme(app)
@@ -53,7 +61,7 @@ def main():
         
         connection_dialog = ConnectionDialog()
         if connection_dialog.exec() != QDialog.Accepted:
-            return
+            return 0
         
         # Get connection info and establish connection
         host, port, username, password = connection_dialog.get_connection_info()
@@ -67,13 +75,14 @@ def main():
         main_window.show()
         
         # Run application
-        sys.exit(app.exec())
+        return app.exec()
         
     except Exception as e:
         if 'splash' in locals():
             splash.close()
         QMessageBox.critical(None, "Error", f"Application failed to start:\n{str(e)}")
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

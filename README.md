@@ -178,9 +178,37 @@ Configure your preferred text editor in the application settings:
 
 ## 📊 Project Structure
 
-<div align="center">
-  <img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-DScuNd77Wk4FRlimfdG9Z5g4yIOc1x.png" alt="Project Structure" width="100%"/>
-</div>
+\`\`\`
+SFTP-GUI-Manager/
+├── 📁 core/                    # Core business logic
+│   ├── ssh_manager.py          # SSH connection management
+│   ├── file_manager.py         # File operations
+│   ├── terminal_manager.py     # Terminal session handling
+│   └── version_manager.py      # Update management
+├── 📁 ui/                      # User interface
+│   ├── 📁 dialogs/            # Dialog windows
+│   │   ├── connection_dialog.py
+│   │   ├── update_dialog.py
+│   │   ├── about_dialog.py
+│   │   ├── command_shortcuts_dialog.py
+│   │   └── splash_screen.py
+│   ├── 📁 widgets/            # UI widgets
+│   │   ├── terminal_widget.py
+│   │   └── file_browser_widget.py
+│   └── main_window.py         # Main application window
+├── 📁 utils/                   # Utilities
+│   ├── config.py              # Configuration management
+│   ├── theme.py               # Application theming
+│   └── file_watcher.py        # File change monitoring
+├── 📁 build_scripts/          # Build automation
+│   ├── build.py               # Unified build script
+│   └── build.bat              # Windows build script
+├── 📁 installer/              # Installer creation
+│   └── installer.py           # Installer script generator
+├── main.py                    # Application entry point
+├── requirements.txt           # Python dependencies
+└── README.md                  # Project documentation
+\`\`\`
 
 ## 🔮 Roadmap
 
