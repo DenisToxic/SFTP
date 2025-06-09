@@ -224,6 +224,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Made with ❤️ by the SFTP GUI Manager Team**
 
 [![GitHub Stars](https://img.shields.io/github/stars/DenisToxic/SFTP?style=social)](https://github.com/DenisToxic/SFTP)
-[![Twitter Follow](https://img.shields.io/twitter/follow/SFTPManager?style=social)](https://twitter.com/SFTPManager)
 
 </div>
