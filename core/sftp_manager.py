@@ -1,43 +1,41 @@
-"""SFTP operations manager"""
+"""SFTP Manager implementation"""
 import os
 import stat
 import posixpath
 import time
 import tempfile
 import subprocess
-from typing import Optional, Callable
+import shutil
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
     QGroupBox, QComboBox, QLabel, QMessageBox, QMenu, QInputDialog,
     QFileDialog, QProgressDialog, QApplication, QTreeWidgetItem
 )
 from PySide6.QtCore import Qt
+import paramiko
 
 from ui.widgets.remote_file_browser import RemoteFileBrowser
 from utils.file_watcher import FileWatcher
 
 
 class SftpManager(QWidget):
-    """Main SFTP operations manager"""
+    """SFTP Manager widget"""
     
-    def __init__(self, ssh_client, sftp_client, host: str, port: int, username: str, password: str):
+    def __init__(self, ssh, sftp, host, port, user, password):
         """Initialize SFTP manager
         
         Args:
-            ssh_client: SSH client instance
-            sftp_client: SFTP client instance
-            host: SSH server hostname
-            port: SSH server port
-            username: SSH username
+            ssh: SSH client
+            sftp: SFTP client
+            host: SSH hostname
+            port: SSH port
+            user: SSH username
             password: SSH password
         """
         super().__init__()
-        self.ssh = ssh_client
-        self.sftp = sftp_client
-        self.host = host
-        self.port = port
-        self.username = username
-        self.password = password
+        self.ssh, self.sftp = ssh, sftp
+        self.host, self.port = host, port
+        self.user, self.pw = user, password
         self.path_stack = []
         self.current_path = "."
         
@@ -47,22 +45,18 @@ class SftpManager(QWidget):
     def _setup_ui(self):
         """Setup user interface"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
         
         # Navigation bar
         nav_layout = QHBoxLayout()
         
         back_btn = QPushButton("⬅ Back")
         back_btn.clicked.connect(self.go_back)
-        back_btn.setToolTip("Go back to previous directory")
         
         up_btn = QPushButton("⬆ Up")
         up_btn.clicked.connect(self.go_up)
-        up_btn.setToolTip("Go to parent directory")
         
         self.path_input = QLineEdit()
-        self.path_input.returnPressed.connect(self.go_to_path)
-        self.path_input.setToolTip("Current directory path")
+        self.path_input.returnPressed.connect(self.go_to)
         
         nav_layout.addWidget(back_btn)
         nav_layout.addWidget(up_btn)
@@ -75,9 +69,9 @@ class SftpManager(QWidget):
         settings_layout = QVBoxLayout(settings_group)
         
         settings_layout.addWidget(QLabel("Default Editor:"))
-        self.editor_combo = QComboBox()
-        self.editor_combo.addItems(["notepad.exe", "code", "notepad++", "gedit", "vim"])
-        settings_layout.addWidget(self.editor_combo)
+        self.editor = QComboBox()
+        self.editor.addItems(["notepad.exe", "code", "notepad++", "gedit"])
+        settings_layout.addWidget(self.editor)
         
         layout.addWidget(settings_group)
         
@@ -93,154 +87,28 @@ class SftpManager(QWidget):
         file_info = item.data(0, Qt.UserRole)
         
         if stat.S_ISDIR(file_info.st_mode):
-            # Navigate to directory
+            # If it's a directory, navigate into it
             new_path = posixpath.join(self.current_path, file_info.filename)
             self.path_stack.append(self.current_path)
             self.load_remote_directory(new_path)
         else:
-            # Open file
+            # If it's a file, try to open it
             self.open_remote_file(file_info.filename)
             
-    def _safe_sftp_operation(self, operation, *args, max_retries: int = 3, **kwargs):
-        """Safely execute SFTP operations with error handling
-        
-        Args:
-            operation: SFTP operation to execute
-            max_retries: Maximum number of retries
-            *args: Arguments to pass to operation
-            **kwargs: Keyword arguments to pass to operation
-            
-        Returns:
-            Result of the operation
-            
-        Raises:
-            Exception: If operation fails after all retries
-        """
-        last_exception = None
-        
+    def _safe_sftp_operation(self, operation, *args, **kwargs):
+        """Safely execute SFTP operations with error handling"""
+        max_retries = 3
         for attempt in range(max_retries):
             try:
                 return operation(*args, **kwargs)
-            except (OSError, IOError) as e:
-                last_exception = e
-                if attempt < max_retries - 1:
-                    print(f"SFTP operation failed (attempt {attempt + 1}), retrying: {e}")
-                    time.sleep(1)
-                    
-        if last_exception:
-            raise last_exception
-                
-    def load_remote_directory(self, path: str):
-        """Load remote directory contents
-        
-        Args:
-            path: Remote directory path
-        """
-        self.file_browser.clear()
-        
-        try:
-            self._safe_sftp_operation(self.sftp.chdir, path)
-            self.current_path = self.sftp.getcwd()
-            self.path_input.setText(self.current_path)
-            
-            files = self._safe_sftp_operation(self.sftp.listdir_attr)
-            
-            # Sort files: directories first, then by name
-            sorted_files = sorted(
-                files, 
-                key=lambda f: (not stat.S_ISDIR(f.st_mode), f.filename.lower())
-            )
-            
-            for file_info in sorted_files:
-                is_directory = stat.S_ISDIR(file_info.st_mode)
-                name = file_info.filename
-                
-                # Format size
-                size_str = ""
-                if not is_directory:
-                    size = file_info.st_size
-                    for unit in ['B', 'KB', 'MB', 'GB']:
-                        if size < 1024:
-                            size_str = f"{size:.1f} {unit}"
-                            break
-                        size /= 1024
-                    else:
-                        size_str = f"{size:.1f} TB"
-                
-                item = QTreeWidgetItem([
-                    ("📁 " + name) if is_directory else name,
-                    size_str,
-                    "Folder" if is_directory else "File",
-                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(file_info.st_mtime))
-                ])
-                item.setData(0, Qt.UserRole, file_info)
-                self.file_browser.addTopLevelItem(item)
-                
-        except Exception as e:
-            QMessageBox.critical(self, "SFTP Error", f"Failed to load directory:\n{str(e)}")
-            
-    def open_remote_file(self, filename: str):
-        """Open a remote file for editing
-        
-        Args:
-            filename: Remote filename
-        """
-        remote_path = posixpath.join(self.current_path, filename)
-        
-        try:
-            # Check file size before downloading
-            file_stat = self._safe_sftp_operation(self.sftp.stat, remote_path)
-            file_size = file_stat.st_size
-            
-            # Warn about large files
-            if file_size > 10 * 1024 * 1024:  # 10MB
-                reply = QMessageBox.question(
-                    self, "Large File Warning",
-                    f"File {filename} is {file_size / (1024*1024):.1f}MB. "
-                    f"Opening large files may be slow. Continue?",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.No
-                )
-                if reply != QMessageBox.Yes:
-                    return
-                    
-            # Download to temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix="_" + filename) as tmp:
-                try:
-                    self._safe_sftp_operation(self.sftp.get, remote_path, tmp.name)
-                    subprocess.Popen([self.editor_combo.currentText(), tmp.name])
-                    
-                    # Start file watcher
-                    def upload_changes(local_path):
-                        try:
-                            self._safe_sftp_operation(self.sftp.put, local_path, remote_path)
-                            print(f"Auto-uploaded changes to {remote_path}")
-                        except Exception as e:
-                            print(f"Failed to auto-upload {remote_path}: {e}")
-                            
-                    FileWatcher(tmp.name, upload_changes).start()
-                    
-                except Exception as e:
-                    os.unlink(tmp.name)  # Clean up temp file on error
+            except (OSError, IOError, paramiko.SSHException) as e:
+                if attempt == max_retries - 1:
                     raise e
-                    
-        except Exception as e:
-            QMessageBox.critical(
-                self, "Open File Error",
-                f"Failed to open {filename}:\n{str(e)}\n\n"
-                f"This could be due to:\n"
-                f"• File permissions\n"
-                f"• File being locked or in use\n"
-                f"• Network connectivity issues"
-            )
-            
-    def upload_file(self, local_path: str, remote_filename: str):
-        """Upload a file to the remote server
-        
-        Args:
-            local_path: Local file path
-            remote_filename: Remote filename
-        """
+                print(f"SFTP operation failed (attempt {attempt + 1}), retrying: {e}")
+                time.sleep(1)  # Wait before retry
+                
+    def upload_file(self, local_path, remote_filename):
+        """Upload a file to the remote server"""
         try:
             remote_path = posixpath.join(self.current_path, remote_filename)
             
@@ -258,25 +126,126 @@ class SftpManager(QWidget):
                     progress.setValue(percent)
                     QApplication.processEvents()
                     return True
-                    
+                
                 self._safe_sftp_operation(self.sftp.put, local_path, remote_path, callback=progress_callback)
                 progress.close()
             else:
                 self._safe_sftp_operation(self.sftp.put, local_path, remote_path)
-                
+            
             self.load_remote_directory(self.current_path)
             QMessageBox.information(self, "Success", f"Uploaded {remote_filename}")
-            
         except Exception as e:
             QMessageBox.critical(self, "Upload Error", f"Failed to upload {remote_filename}:\n{str(e)}")
             
-    def download_file(self, remote_filename: str, local_path: Optional[str] = None):
-        """Download a file from the remote server
+    def upload_folder(self, local_folder_path, remote_folder_name):
+        """Upload an entire folder recursively
         
         Args:
-            remote_filename: Remote filename
-            local_path: Local file path (optional)
+            local_folder_path: Local folder path
+            remote_folder_name: Remote folder name
         """
+        try:
+            remote_folder_path = posixpath.join(self.current_path, remote_folder_name)
+            
+            # Count total files for progress tracking
+            total_files = 0
+            for root, dirs, files in os.walk(local_folder_path):
+                total_files += len(files)
+            
+            if total_files == 0:
+                # Create empty directory
+                try:
+                    self._safe_sftp_operation(self.sftp.mkdir, remote_folder_path)
+                except IOError:
+                    # Directory might already exist
+                    pass
+                    
+                QMessageBox.information(self, "Empty Folder", f"Created empty folder '{remote_folder_name}'")
+                self.load_remote_directory(self.current_path)
+                return
+            
+            # Show progress dialog for folder upload
+            progress = QProgressDialog(f"Uploading folder '{remote_folder_name}'...", "Cancel", 0, total_files, self)
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setWindowTitle("Folder Upload")
+            progress.show()
+            
+            uploaded_files = 0
+            cancelled = False
+            
+            def upload_recursive(local_dir, remote_dir):
+                nonlocal uploaded_files, cancelled
+                
+                if cancelled:
+                    return False
+                
+                # Create remote directory if it doesn't exist
+                try:
+                    try:
+                        self.sftp.stat(remote_dir)
+                    except IOError:
+                        self._safe_sftp_operation(self.sftp.mkdir, remote_dir)
+                except Exception as e:
+                    print(f"Failed to create directory {remote_dir}: {e}")
+                    return False
+                
+                # Upload files and subdirectories
+                for item in os.listdir(local_dir):
+                    if progress.wasCanceled():
+                        cancelled = True
+                        return False
+                        
+                    local_item_path = os.path.join(local_dir, item)
+                    remote_item_path = posixpath.join(remote_dir, item)
+                    
+                    if os.path.isfile(local_item_path):
+                        # Upload file
+                        try:
+                            self._safe_sftp_operation(self.sftp.put, local_item_path, remote_item_path)
+                            uploaded_files += 1
+                            progress.setValue(uploaded_files)
+                            progress.setLabelText(f"Uploading: {item} ({uploaded_files}/{total_files})")
+                            QApplication.processEvents()
+                        except Exception as e:
+                            QMessageBox.warning(
+                                self, "Upload Error", 
+                                f"Failed to upload {item}:\n{str(e)}"
+                            )
+                            # Continue with other files
+                            
+                    elif os.path.isdir(local_item_path):
+                        # Recursively upload subdirectory
+                        if not upload_recursive(local_item_path, remote_item_path):
+                            return False
+                
+                return True
+            
+            # Start recursive upload
+            success = upload_recursive(local_folder_path, remote_folder_path)
+            progress.close()
+            
+            if success and not cancelled:
+                self.load_remote_directory(self.current_path)
+                QMessageBox.information(
+                    self, "Success", 
+                    f"Folder '{remote_folder_name}' uploaded successfully!\n"
+                    f"Uploaded {uploaded_files} files."
+                )
+            elif cancelled:
+                QMessageBox.information(
+                    self, "Cancelled", 
+                    f"Folder upload cancelled. {uploaded_files} files were uploaded."
+                )
+                self.load_remote_directory(self.current_path)
+                
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Folder Upload Error", 
+                f"Failed to upload folder '{remote_folder_name}':\n{str(e)}"
+            )
+            
+    def download_file(self, remote_filename, local_path=None):
+        """Download a file from the remote server"""
         try:
             remote_path = posixpath.join(self.current_path, remote_filename)
             
@@ -286,8 +255,8 @@ class SftpManager(QWidget):
                 )
                 if not local_path:
                     return
-                    
-            # Check file size and show progress for large files
+            
+            # Check if file exists and get size for progress
             try:
                 file_stat = self._safe_sftp_operation(self.sftp.stat, remote_path)
                 file_size = file_stat.st_size
@@ -304,27 +273,212 @@ class SftpManager(QWidget):
                         progress.setValue(percent)
                         QApplication.processEvents()
                         return True
-                        
+                    
                     self._safe_sftp_operation(self.sftp.get, remote_path, local_path, callback=progress_callback)
                     progress.close()
                 else:
                     self._safe_sftp_operation(self.sftp.get, remote_path, local_path)
-                    
+                
                 QMessageBox.information(self, "Success", f"Downloaded {remote_filename}")
                 
             except Exception as e:
-                QMessageBox.critical(
-                    self, "Download Error",
+                QMessageBox.critical(self, "Download Error", 
                     f"Failed to download {remote_filename}:\n{str(e)}\n\n"
                     f"This could be due to:\n"
                     f"• File permissions\n"
                     f"• Network connectivity issues\n"
                     f"• File being locked or in use\n"
-                    f"• Insufficient disk space"
-                )
+                    f"• Insufficient disk space")
                 
         except Exception as e:
             QMessageBox.critical(self, "Download Error", f"Failed to download {remote_filename}:\n{str(e)}")
+            
+    def download_folder(self, remote_folder_name, local_folder_path=None):
+        """Download an entire folder recursively
+        
+        Args:
+            remote_folder_name: Remote folder name
+            local_folder_path: Local folder path (optional)
+        """
+        try:
+            remote_folder_path = posixpath.join(self.current_path, remote_folder_name)
+            
+            if local_folder_path is None:
+                local_folder_path = QFileDialog.getExistingDirectory(
+                    self, f"Save folder '{remote_folder_name}' to...", ""
+                )
+                if not local_folder_path:
+                    return
+                    
+                local_folder_path = os.path.join(local_folder_path, remote_folder_name)
+            
+            # Count total files for progress tracking
+            def count_remote_files(remote_dir):
+                count = 0
+                try:
+                    files = self._safe_sftp_operation(self.sftp.listdir_attr, remote_dir)
+                    for file_info in files:
+                        if stat.S_ISDIR(file_info.st_mode):
+                            count += count_remote_files(posixpath.join(remote_dir, file_info.filename))
+                        else:
+                            count += 1
+                except Exception:
+                    pass
+                return count
+            
+            total_files = count_remote_files(remote_folder_path)
+            
+            if total_files == 0:
+                # Create empty directory
+                os.makedirs(local_folder_path, exist_ok=True)
+                QMessageBox.information(self, "Empty Folder", f"Created empty folder '{remote_folder_name}'")
+                return
+            
+            # Show progress dialog for folder download
+            progress = QProgressDialog(f"Downloading folder '{remote_folder_name}'...", "Cancel", 0, total_files, self)
+            progress.setWindowModality(Qt.WindowModal)
+            progress.setWindowTitle("Folder Download")
+            progress.show()
+            
+            downloaded_files = 0
+            cancelled = False
+            
+            def download_recursive(remote_dir, local_dir):
+                nonlocal downloaded_files, cancelled
+                
+                if cancelled:
+                    return False
+                
+                # Create local directory
+                os.makedirs(local_dir, exist_ok=True)
+                
+                # Download files and subdirectories
+                try:
+                    files = self._safe_sftp_operation(self.sftp.listdir_attr, remote_dir)
+                    
+                    for file_info in files:
+                        if progress.wasCanceled():
+                            cancelled = True
+                            return False
+                            
+                        remote_item_path = posixpath.join(remote_dir, file_info.filename)
+                        local_item_path = os.path.join(local_dir, file_info.filename)
+                        
+                        if stat.S_ISDIR(file_info.st_mode):
+                            # Recursively download subdirectory
+                            if not download_recursive(remote_item_path, local_item_path):
+                                return False
+                        else:
+                            # Download file
+                            try:
+                                self._safe_sftp_operation(self.sftp.get, remote_item_path, local_item_path)
+                                downloaded_files += 1
+                                progress.setValue(downloaded_files)
+                                progress.setLabelText(f"Downloading: {file_info.filename} ({downloaded_files}/{total_files})")
+                                QApplication.processEvents()
+                            except Exception as e:
+                                QMessageBox.warning(
+                                    self, "Download Error", 
+                                    f"Failed to download {file_info.filename}:\n{str(e)}"
+                                )
+                                # Continue with other files
+                                
+                except Exception as e:
+                    print(f"Failed to list directory {remote_dir}: {e}")
+                    return False
+                
+                return True
+            
+            # Start recursive download
+            success = download_recursive(remote_folder_path, local_folder_path)
+            progress.close()
+            
+            if success and not cancelled:
+                QMessageBox.information(
+                    self, "Success", 
+                    f"Folder '{remote_folder_name}' downloaded successfully!\n"
+                    f"Downloaded {downloaded_files} files to:\n{local_folder_path}"
+                )
+            elif cancelled:
+                QMessageBox.information(
+                    self, "Cancelled", 
+                    f"Folder download cancelled. {downloaded_files} files were downloaded."
+                )
+                
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Folder Download Error", 
+                f"Failed to download folder '{remote_folder_name}':\n{str(e)}"
+            )
+            
+    def load_remote_directory(self, path):
+        """Load remote directory contents"""
+        self.file_browser.clear()
+        try:
+            self._safe_sftp_operation(self.sftp.chdir, path)
+            self.current_path = self.sftp.getcwd()
+            self.path_input.setText(self.current_path)
+            
+            files = self._safe_sftp_operation(self.sftp.listdir_attr)
+            for file_info in files:
+                is_directory = stat.S_ISDIR(file_info.st_mode)
+                name = file_info.filename
+                
+                item = QTreeWidgetItem([
+                    ("📁 " + name) if is_directory else name,
+                    "" if is_directory else f"{file_info.st_size} B",
+                    "Folder" if is_directory else "File",
+                    time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(file_info.st_mtime))
+                ])
+                item.setData(0, Qt.UserRole, file_info)
+                self.file_browser.addTopLevelItem(item)
+        except Exception as e:
+            QMessageBox.critical(self, "SFTP Error", f"Failed to load directory:\n{str(e)}")
+            
+    def open_remote_file(self, filename):
+        """Open a remote file for editing"""
+        remote_path = posixpath.join(self.current_path, filename)
+        try:
+            # Check file size before downloading
+            file_stat = self._safe_sftp_operation(self.sftp.stat, remote_path)
+            file_size = file_stat.st_size
+            
+            # Warn about large files
+            if file_size > 10 * 1024 * 1024:  # 10MB
+                reply = QMessageBox.question(
+                    self, "Large File Warning",
+                    f"File {filename} is {file_size / (1024*1024):.1f}MB. "
+                    f"Opening large files may be slow. Continue?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+                if reply != QMessageBox.Yes:
+                    return
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix="_" + filename) as tmp:
+                try:
+                    self._safe_sftp_operation(self.sftp.get, remote_path, tmp.name)
+                    subprocess.Popen([self.editor.currentText(), tmp.name])
+                    FileWatcher(tmp.name, lambda lp: self._upload_changed_file(lp, remote_path)).start()
+                except Exception as e:
+                    os.unlink(tmp.name)  # Clean up temp file on error
+                    raise e
+                    
+        except Exception as e:
+            QMessageBox.critical(self, "Open File Error", 
+                f"Failed to open {filename}:\n{str(e)}\n\n"
+                f"This could be due to:\n"
+                f"• File permissions\n"
+                f"• File being locked or in use\n"
+                f"• Network connectivity issues")
+                
+    def _upload_changed_file(self, local_path, remote_path):
+        """Upload a changed file back to the server"""
+        try:
+            self._safe_sftp_operation(self.sftp.put, local_path, remote_path)
+            print(f"Auto-uploaded changes to {remote_path}")
+        except Exception as e:
+            print(f"Failed to auto-upload {remote_path}: {e}")
             
     def go_back(self):
         """Go back to previous directory"""
@@ -333,37 +487,31 @@ class SftpManager(QWidget):
             
     def go_up(self):
         """Go to parent directory"""
-        parent_path = posixpath.dirname(self.current_path)
-        if parent_path != self.current_path:  # Avoid infinite loop at root
-            self.path_stack.append(self.current_path)
-            self.load_remote_directory(parent_path)
+        self.path_stack.append(self.current_path)
+        self.load_remote_directory(posixpath.dirname(self.current_path))
         
-    def go_to_path(self):
+    def go_to(self):
         """Navigate to path in input field"""
         self.load_remote_directory(self.path_input.text())
         
-    def _show_context_menu(self, position):
+    def _show_context_menu(self, pos):
         """Show context menu"""
-        item = self.file_browser.itemAt(position)
+        item = self.file_browser.itemAt(pos)
         menu = QMenu(self)
-        
         if item:
             file_info = item.data(0, Qt.UserRole)
-            
             if not stat.S_ISDIR(file_info.st_mode):
                 menu.addAction("Open", lambda: self.open_remote_file(file_info.filename))
                 menu.addAction("Download", lambda: self.download_file(file_info.filename))
-                
+            else:
+                menu.addAction("Download Folder", lambda: self.download_folder(file_info.filename))
             menu.addAction("Delete", lambda: self._delete(file_info))
             menu.addAction("Rename", lambda: self._rename(file_info))
-            menu.addSeparator()
-            
+        menu.addSeparator()
         menu.addAction("New File", self._create_remote_file)
         menu.addAction("New Folder", self._create_remote_folder)
         menu.addAction("Upload File", self._upload_file_dialog)
-        menu.addAction("Refresh", lambda: self.load_remote_directory(self.current_path))
-        
-        menu.exec(self.file_browser.viewport().mapToGlobal(position))
+        menu.exec(self.file_browser.viewport().mapToGlobal(pos))
         
     def _upload_file_dialog(self):
         """Show file dialog to upload a file"""
@@ -374,14 +522,7 @@ class SftpManager(QWidget):
             
     def _delete(self, file_info):
         """Delete file or directory"""
-        reply = QMessageBox.question(
-            self, "Delete",
-            f"Delete '{file_info.filename}'?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
+        if QMessageBox.question(self, "Delete", f"Delete '{file_info.filename}'?") == QMessageBox.Yes:
             try:
                 path = posixpath.join(self.current_path, file_info.filename)
                 if stat.S_ISDIR(file_info.st_mode):
@@ -394,17 +535,14 @@ class SftpManager(QWidget):
                 
     def _rename(self, file_info):
         """Rename file or directory"""
-        new_name, ok = QInputDialog.getText(
-            self, "Rename",
-            f"New name for '{file_info.filename}':",
-            text=file_info.filename
-        )
-        
-        if ok and new_name and new_name != file_info.filename:
+        new_name, ok = QInputDialog.getText(self, "Rename", f"New name for '{file_info.filename}':")
+        if ok and new_name:
             try:
-                old_path = posixpath.join(self.current_path, file_info.filename)
-                new_path = posixpath.join(self.current_path, new_name)
-                self._safe_sftp_operation(self.sftp.rename, old_path, new_path)
+                self._safe_sftp_operation(
+                    self.sftp.rename,
+                    posixpath.join(self.current_path, file_info.filename),
+                    posixpath.join(self.current_path, new_name)
+                )
                 self.load_remote_directory(self.current_path)
             except Exception as e:
                 QMessageBox.critical(self, "Rename Error", f"Failed to rename {file_info.filename}:\n{str(e)}")
@@ -426,8 +564,7 @@ class SftpManager(QWidget):
         folder_name, ok = QInputDialog.getText(self, "New Folder", "Folder name:")
         if ok and folder_name:
             try:
-                remote_path = posixpath.join(self.current_path, folder_name)
-                self._safe_sftp_operation(self.sftp.mkdir, remote_path)
+                self._safe_sftp_operation(self.sftp.mkdir, posixpath.join(self.current_path, folder_name))
                 self.load_remote_directory(self.current_path)
             except Exception as e:
                 QMessageBox.critical(self, "Create Folder Error", f"Failed to create folder {folder_name}:\n{str(e)}")

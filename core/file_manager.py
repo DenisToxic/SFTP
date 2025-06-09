@@ -6,6 +6,8 @@ import tempfile
 from typing import List, Optional, Callable
 from dataclasses import dataclass
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtWidgets import QProgressDialog, QApplication
+from PySide6.QtCore import Qt
 
 from core.ssh_manager import SSHManager
 
@@ -250,3 +252,100 @@ class FileManager(QObject):
             remote_filename: Remote filename
         """
         self.upload_file(temp_path, remote_filename)
+
+    def upload_folder(self, local_folder_path: str, remote_folder_name: str = None):
+        """Upload entire folder recursively
+        
+        Args:
+            local_folder_path: Local folder path
+            remote_folder_name: Remote folder name (optional)
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if remote_folder_name is None:
+            remote_folder_name = os.path.basename(local_folder_path)
+            
+        remote_folder_path = posixpath.join(self.current_path, remote_folder_name)
+        sftp = self.ssh_manager.get_sftp()
+        
+        # Count total files for progress tracking
+        total_files = 0
+        for root, dirs, files in os.walk(local_folder_path):
+            total_files += len(files)
+            
+        if total_files == 0:
+            # Create empty directory if no files
+            try:
+                self.create_directory(remote_folder_name)
+                self.file_uploaded.emit(remote_folder_name)
+                return True
+            except Exception as e:
+                print(f"Failed to create empty directory: {e}")
+                return False
+        
+        # Create progress dialog
+        progress = QProgressDialog(
+            f"Uploading folder {remote_folder_name}...", 
+            "Cancel", 0, total_files, None
+        )
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setValue(0)
+        progress.show()
+        
+        uploaded_files = 0
+        cancelled = False
+        
+        def _upload_recursive(local_dir, remote_dir):
+            nonlocal uploaded_files, cancelled
+            
+            if cancelled:
+                return False
+                
+            # Create remote directory if it doesn't exist
+            try:
+                try:
+                    sftp.stat(remote_dir)
+                except IOError:
+                    # Directory doesn't exist, create it
+                    self.ssh_manager.safe_operation(sftp.mkdir, remote_dir)
+            except Exception as e:
+                print(f"Failed to create directory {remote_dir}: {e}")
+                return False
+                
+            # Upload files and subdirectories
+            for item in os.listdir(local_dir):
+                if progress.wasCanceled():
+                    cancelled = True
+                    return False
+                    
+                local_item_path = os.path.join(local_dir, item)
+                remote_item_path = posixpath.join(remote_dir, item)
+                
+                if os.path.isfile(local_item_path):
+                    # Upload file
+                    try:
+                        self.ssh_manager.safe_operation(sftp.put, local_item_path, remote_item_path)
+                        uploaded_files += 1
+                        progress.setValue(uploaded_files)
+                        progress.setLabelText(f"Uploading: {item} ({uploaded_files}/{total_files})")
+                        QApplication.processEvents()
+                    except Exception as e:
+                        print(f"Failed to upload {item}: {e}")
+                        # Continue with other files
+                elif os.path.isdir(local_item_path):
+                    # Recursively upload subdirectory
+                    if not _upload_recursive(local_item_path, remote_item_path):
+                        return False
+                        
+            return True
+            
+        # Start recursive upload
+        result = _upload_recursive(local_folder_path, remote_folder_path)
+        progress.close()
+        
+        if result:
+            self.file_uploaded.emit(remote_folder_name)
+            
+        return result

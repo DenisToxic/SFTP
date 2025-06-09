@@ -1,7 +1,7 @@
 """Configuration management"""
 import json
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 
 class ConfigManager:
@@ -89,3 +89,53 @@ class ConfigManager:
         }
         self.set("connections", connections)
         self.save_config()
+
+    def get_command_shortcuts(self) -> Dict[str, Dict[str, str]]:
+        """Get saved command shortcuts
+        
+        Returns:
+            Dictionary of command shortcuts
+        """
+        return self.get("command_shortcuts", {})
+        
+    def save_command_shortcut(self, name: str, command: str, description: str = "", category: str = "General"):
+        """Save command shortcut
+        
+        Args:
+            name: Shortcut name
+            command: Command to execute
+            description: Optional description
+            category: Command category
+        """
+        shortcuts = self.get_command_shortcuts()
+        shortcuts[name] = {
+            "command": command,
+            "description": description,
+            "category": category
+        }
+        self.set("command_shortcuts", shortcuts)
+        self.save_config()
+        
+    def delete_command_shortcut(self, name: str):
+        """Delete command shortcut
+        
+        Args:
+            name: Shortcut name to delete
+        """
+        shortcuts = self.get_command_shortcuts()
+        if name in shortcuts:
+            del shortcuts[name]
+            self.set("command_shortcuts", shortcuts)
+            self.save_config()
+        
+    def get_command_categories(self) -> List[str]:
+        """Get list of command categories
+        
+        Returns:
+            List of category names
+        """
+        shortcuts = self.get_command_shortcuts()
+        categories = set()
+        for shortcut in shortcuts.values():
+            categories.add(shortcut.get("category", "General"))
+        return sorted(list(categories))

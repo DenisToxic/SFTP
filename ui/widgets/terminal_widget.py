@@ -71,6 +71,7 @@ class TerminalWidget(QWidget):
             "-o", "StrictHostKeyChecking=no",
             "-o", "PreferredAuthentications=password",
             "-o", "PubkeyAuthentication=no",
+            "-o", "PubkeyAuthentication=no",
             "-p", str(self.port),
             f"{self.username}@{self.host}"
         ]
@@ -132,3 +133,12 @@ class TerminalWidget(QWidget):
             self.pty.close()
             self.pty = None
         event.accept()
+
+    def write_input(self, text: str):
+        """Write input to terminal
+        
+        Args:
+            text: Text to write to terminal
+        """
+        if self.pty:
+            self.pty.write(text)

@@ -13,6 +13,7 @@ from ui.widgets.terminal_widget import TerminalWidget
 from ui.dialogs.update_dialog import UpdateDialog
 from ui.dialogs.about_dialog import AboutDialog
 from core.sftp_manager import SftpManager
+from ui.dialogs.command_shortcuts_dialog import CommandShortcutsDialog
 
 
 class MainWindow(QMainWindow):
@@ -94,6 +95,22 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
         
+        # Shortcuts menu
+        shortcuts_menu = menubar.addMenu("Shortcuts")
+        
+        manage_shortcuts_action = QAction("⚡ Manage Shortcuts", self)
+        manage_shortcuts_action.setShortcut("Ctrl+Shift+C")
+        manage_shortcuts_action.triggered.connect(self._show_command_shortcuts)
+        shortcuts_menu.addAction(manage_shortcuts_action)
+        
+        # Add some predefined shortcut categories as submenus
+        system_menu = shortcuts_menu.addMenu("System")
+        file_menu = shortcuts_menu.addMenu("File Operations")
+        network_menu = shortcuts_menu.addMenu("Network")
+        
+        # We'll populate these dynamically in a separate method
+        self._populate_shortcut_menus(system_menu, file_menu, network_menu)
+        
         # Tools menu
         tools_menu = menubar.addMenu("Tools")
         
@@ -113,6 +130,56 @@ class MainWindow(QMainWindow):
         about_action = QAction("About", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
+
+    def _populate_shortcut_menus(self, system_menu, file_menu, network_menu):
+        """Populate shortcut menus with available shortcuts
+        
+        Args:
+            system_menu: System shortcuts menu
+            file_menu: File operations shortcuts menu
+            network_menu: Network shortcuts menu
+        """
+        from utils.config import ConfigManager
+        
+        # Get shortcuts from config
+        config_manager = ConfigManager()
+        shortcuts = config_manager.get_command_shortcuts()
+        
+        # Group by category
+        categories = {}
+        for name, data in shortcuts.items():
+            category = data.get("category", "General")
+            if category not in categories:
+                categories[category] = []
+            categories[category].append((name, data))
+        
+        # Add shortcuts to appropriate menus
+        if "System" in categories:
+            for name, data in sorted(categories["System"]):
+                action = QAction(name, self)
+                action.triggered.connect(lambda checked=False, cmd=data.get("command", ""): 
+                                        self._execute_command_shortcut(cmd))
+                if data.get("description"):
+                    action.setStatusTip(data.get("description"))
+                system_menu.addAction(action)
+        
+        if "File Operations" in categories:
+            for name, data in sorted(categories["File Operations"]):
+                action = QAction(name, self)
+                action.triggered.connect(lambda checked=False, cmd=data.get("command", ""): 
+                                        self._execute_command_shortcut(cmd))
+                if data.get("description"):
+                    action.setStatusTip(data.get("description"))
+                file_menu.addAction(action)
+        
+        if "Network" in categories:
+            for name, data in sorted(categories["Network"]):
+                action = QAction(name, self)
+                action.triggered.connect(lambda checked=False, cmd=data.get("command", ""): 
+                                        self._execute_command_shortcut(cmd))
+                if data.get("description"):
+                    action.setStatusTip(data.get("description"))
+                network_menu.addAction(action)
         
     def _create_toolbar(self):
         """Create application toolbar"""
@@ -261,3 +328,22 @@ class MainWindow(QMainWindow):
         """Handle window close event"""
         self.ssh_manager.disconnect()
         event.accept()
+        
+    def _show_command_shortcuts(self):
+        """Show command shortcuts dialog"""
+        dialog = CommandShortcutsDialog(self)
+        dialog.shortcut_executed.connect(self._execute_command_shortcut)
+        dialog.show()  # Non-modal dialog
+    
+    def _execute_command_shortcut(self, command: str):
+        """Execute a command shortcut in the terminal
+        
+        Args:
+            command: Command to execute
+        """
+        if hasattr(self, 'terminal_widget') and self.terminal_widget:
+            # Send command to terminal
+            self.terminal_widget.write_input(command + "\r")
+            self.status_bar.showMessage(f"Executed shortcut: {command[:50]}...", 3000)
+        else:
+            QMessageBox.warning(self, "No Terminal", "No active terminal session to execute command.")
